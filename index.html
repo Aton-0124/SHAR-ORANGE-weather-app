@@ -1,0 +1,257 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Weather App</title>
+<style>
+	body {
+background-color: whitesmoke;
+font-family: "Space Grotesk", Arial, sans-serif;
+}
+#container {
+margin-left: auto;
+margin-right: auto;
+width: 800px;
+}
+#header {
+border: 1px solid lavender;
+border-radius: 1em;
+background-color: white;
+padding: 1em 1.5em 1em 1.5em;
+position: relative;
+}
+#title {
+font-size: 2.5em;
+width: 6em;
+display: inline-block;
+margin: 0.5em 0 0.5em 0;
+}
+.winfo {
+padding-right: 1em;
+font-size: 2em;
+}
+#district {
+font-weight: bold;
+padding: 1em;
+}
+#show {
+display: flex;
+flex-wrap: wrap;
+justify-content: space-around;
+}
+.block {
+flex: 1 0 8em;
+height: 8em;
+border-radius: 1em;
+margin: 0.5em;
+padding: 0.5em;
+background-color: #AED6F1;
+box-shadow: 3px 3px 2px 2px grey;
+}
+p {
+text-align: center;
+}
+p:first-of-type {
+margin-top: 2em;
+}
+.btn {
+float: right;
+margin: 1px;
+}
+#reload {
+position: absolute;
+top: 0.3em;
+right: 0.3em;
+
+@media only screen and (max-width: 800px) {
+#container {
+width: 100%;
+}
+#title {
+display: block;
+margin: 0.5em 0 0.25em 0;
+}
+#icon {
+display: block;
+margin-bottom: 0.25em;
+}
+.winfo {
+padding-right: 0.7em;
+font-size: 1.5em;
+}
+#district {
+text-align: center;
+padding: 0.6em;
+}
+span:nth-of-type(3) {
+padding-right: 0;
+}
+}
+</style>
+</head>
+<body>
+  <div id="container">
+    <div id="header"></div>
+    <div id="district"></div>
+    <div id="show"></div>
+  </div>
+  <script>
+
+// get the weather data from Observatory
+async function getObData() {
+return fetch("https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=en", {mode: 'cors'})
+.then(response => response.json());
+}
+
+// get the geolocation- latitude and longitude
+function getloc() {
+return new Promise((resolve, reject) => {
+function success(position) {
+let data = {
+lat: position.coords.latitude,
+lng: position.coords.longitude
+};
+resolve(data);
+}
+function error() {
+reject("Unable to retrieve your location");
+}
+navigator.geolocation.getCurrentPosition(success, error);
+});
+}
+
+
+
+// get the current district location
+function getdistrict(pos) {
+  return fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${pos.lat}&longitude=${pos.lng}&localityLanguage=en`,
+        {mode: 'cors'})
+  .then(response => response.json());
+}
+
+async function main() {
+  try {
+    var pos = await getloc(); //wait for getting current geolocation
+  } catch(err) { //do this when encountering error
+    console.log(err);
+    var pos = null; //set to null when error
+  }
+	
+  try {
+    if (pos) { //geolocation info is available
+      var addr = await getdistrict(pos); //wait for getting district info
+    } else {  //geolocation info is not available
+      var addr = null; //cannot use the reverse geocode service
+    }
+  } catch(err) { //do this when encountering error
+    console.log(err);
+    var addr = null; //set to null when error
+  }
+
+  //display the district info
+  if (addr) { //district info is available
+    //Get the HTML div block for writing the data
+    let area = document.getElementById('district');  
+    //write the district info to the HTML div block
+    area.innerText = 'Current District: '+addr.locality.slice(0,addr.locality.length-9);    
+  }
+ try {
+    var Odata = await getObData(); //wait for weather data
+  } catch(err) { //do this when encountering error
+    console.log(err);
+    document.getElementById('header').innerHTML = "Unable to retrieve weather data";
+    return; //finish and stop the program
+  }
+  
+  //Get the HTML div block for writing the data
+  let output = document.getElementById('header');
+	
+  //display the title
+  let title = document.createElement('div');
+  title.id = 'title';
+  title.innerHTML = 'Weather in Hong Kong';
+  output.append(title);
+  //display the weather icon
+  let iconidx = Odata.icon[0];
+  let icon = document.createElement('img');
+  icon.src = 'https://rss.weather.gov.hk/img/pic'+iconidx+'.png';
+  icon.id = 'icon';
+  icon.setAttribute('class', 'winfo');
+  output.append(icon);
+  
+  //display the temperature info
+  let tempBlk = document.createElement('span');
+  tempBlk.setAttribute('class', 'winfo');
+  let tempIcon = "<img src='thermometer-48.png'>";
+  let tempData = Odata.temperature.data[1].value;
+  tempBlk.innerHTML = tempIcon + "<span id='temp'>" + tempData + "</span> <small>°C</small>";
+  output.append(tempBlk);
+  
+  //display the humidity info
+  let humBlk = document.createElement('span');
+  humBlk.setAttribute('class', 'winfo');
+  let humIcon = "<img src='drop-48.png'>";
+  let humData = Odata.humidity.data[0].value;
+  humBlk.innerHTML = humIcon + "<span id='humidity'>" + humData + "</span><small>%</small>";
+  output.append(humBlk);
+
+
+
+  //display the rainfall info
+  if (addr) { //district info is available
+    let rainBlk = document.createElement('span');
+    rainBlk.setAttribute('class', 'winfo');      
+    let rainIcon = "<img src='rain-48.png'>";
+    rainBlk.innerHTML = rainIcon + "<span id='rain'>0 </span><small>mm</small>";
+    output.append(rainBlk);      
+    Odata.rainfall.data[0].place = 'central and western district';
+    for (place of Odata.rainfall.data) {
+      let district = place.place.toLowerCase();
+      if (!district.includes('district'))
+        district = district + ' district';
+      if (district == addr.locality.toLowerCase()) {
+        let rainData = place.max;
+        let rain = document.getElementById('rain');
+        rain.innerText = rainData;
+      }
+    }
+  }	
+
+  //show the temperature data of different locations
+	
+  //get the HTML <div> block to show those locations' temperatures
+  let view = document.getElementById("show");
+  for (loc of Odata.temperature.data) {  //iterate thru all temp data
+    let elm = document.createElement('div');
+    elm.setAttribute('class', 'block');
+		//add the cancel icon, location, and temperature
+    elm.innerHTML = "<img class='btn' src='cancel-24.ico'><p>" + loc.place + "</p> <p>" + loc.value + " °C</p>";
+    view.append(elm); //add the block to Webpage
+  }
+  
+  //add event handler to each cross button
+  btns = document.querySelectorAll('.btn'); //get all cancel icons
+  for (let btn of btns) {  //iterate thru all cancel icons
+    //add an handler to turn off the display of that block
+    btn.addEventListener('click', (event) => {
+      let parent = event.target.parentNode;
+      parent.style.display = 'none';
+    });
+  }
+}
+
+main();
+let header = document.getElementById('header');
+let reload = document.createElement('img');
+reload.src = "reload-32.png";
+reload.id = "reload";
+header.prepend(reload);
+//add event handler to execute reload
+reload.addEventListener('click', () => {
+document.location.reload();
+});
+
+  </script>
+</body>
+</html>
